@@ -169,12 +169,12 @@ def main(args):
         help="Annotated if genome not masked and skip bad contigs",
     )
     parser.add_argument("--busco_db", default="dikarya", help="BUSCO model database")
-    parser.add_argument(
-        "-t",
-        "--tbl2asn",
-        default="-l paired-ends",
-        help="Parameters for tbl2asn, linkage and gap info",
-    )
+##    parser.add_argument(
+##        "-t",
+##        "--tbl2asn",
+##        default="-l paired-ends",
+##        help="Parameters for tbl2asn, linkage and gap info",
+##    )
     parser.add_argument(
         "--organism",
         default="fungus",
@@ -2791,6 +2791,28 @@ If you can run GeneMark outside funannotate you can add with --genemark_gtf opti
     )
     lib.log.info("Converting to final Genbank format")
     # have to run as subprocess because of multiprocessing issues
+##    cmd = [
+##        sys.executable,
+##        os.path.join(parentdir, "aux_scripts", "tbl2asn_parallel.py"),
+##        "-i",
+##        tbl_file,
+##        "-f",
+##        MaskGenome,
+##        "-o",
+##        gag3dir,
+##        "--sbt",
+##        SBT,
+##        "-d",
+##        discrep,
+##        "-s",
+##        args.species,
+##        "-t",
+##        args.tbl2asn,
+##        "-v",
+##        "1",
+##        "-c",
+##        str(args.cpus),
+##    ]
     cmd = [
         sys.executable,
         os.path.join(parentdir, "aux_scripts", "tbl2asn_parallel.py"),
@@ -2806,10 +2828,6 @@ If you can run GeneMark outside funannotate you can add with --genemark_gtf opti
         discrep,
         "-s",
         args.species,
-        "-t",
-        args.tbl2asn,
-        "-v",
-        "1",
         "-c",
         str(args.cpus),
     ]
@@ -2833,12 +2851,32 @@ If you can run GeneMark outside funannotate you can add with --genemark_gtf opti
             strain_meta = "[strain=" + args.strain + "]"
             meta = meta + " " + strain_meta
         fun_version = lib.get_version()
+##        cmd = [
+##            "tbl2asn",
+##            "-y",
+##            '"Annotated using ' + fun_version + '"',
+##            "-N",
+##            "1",
+##            "-t",
+##            SBT,
+##            "-M",
+##            "n",
+##            "-j",
+##            '"' + meta + '"',
+##            "-V",
+##            "b",
+##            "-c",
+##            "f",
+##            "-T",
+##            "-a",
+##            "r10u",
+##            "-p",
+##            gag3dir,
+##        ]
         cmd = [
-            "tbl2asn",
+            "linux64.table2asn",
             "-y",
             '"Annotated using ' + fun_version + '"',
-            "-N",
-            "1",
             "-t",
             SBT,
             "-M",
@@ -2849,11 +2887,15 @@ If you can run GeneMark outside funannotate you can add with --genemark_gtf opti
             "b",
             "-c",
             "f",
-            "-T",
             "-a",
-            "r10u",
-            "-p",
+            "a",
+            "-indir",
             gag3dir,
+            "-f", #new additions start here 
+            os.path.join(gag3dir, "genome.tbl"),
+            "-i",
+            os.path.join(gag3dir, "genome.fsa"),
+            "-Z",
         ]
         subprocess.call(cmd)
         if not lib.checkannotations(os.path.join(gag3dir, "genome.gbf")):

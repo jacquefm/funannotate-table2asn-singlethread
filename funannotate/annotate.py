@@ -462,8 +462,6 @@ def get_emapper_version():
     m = re.match(r"emapper-(\S+)", vers)
     if m:
         vers = m.group(1)
-        if vers.find("-") >= 0:
-            vers = vers.split("-")[0]
         return vers
     else:
         return False
@@ -715,10 +713,6 @@ def main(args):
             Transcripts = os.path.join(
                 outputdir, "annotate_misc", "genome.transcripts.fasta"
             )
-            CDS = os.path.join(
-                outputdir, "annotate_misc", "genome.cds.fasta"
-            )
-            
             GFF = os.path.join(outputdir, "annotate_misc", "genome.gff3")
             annotTBL = os.path.join(outputdir, "annotate_misc", "genome.tbl")
             lib.log.info("Checking GenBank file for annotation")
@@ -726,8 +720,8 @@ def main(args):
                 lib.log.error("Found no annotation in GenBank file, exiting")
                 sys.exit(1)
             GeneCounts = lib.gb2parts(
-                genbank, annotTBL, GFF, Proteins, Transcripts, CDS, Scaffolds
-                )
+                genbank, annotTBL, GFF, Proteins, Transcripts, Scaffolds
+            )
     else:
         # should be a folder, with funannotate files, thus store results there, no need to create output folder
         if not os.path.isdir(args.input):
@@ -801,9 +795,6 @@ def main(args):
             Transcripts = os.path.join(
                 outputdir, "annotate_misc", "genome.transcripts.fasta"
             )
-            CDS = os.path.join(
-                outputdir, "annotate_misc", "genome.cds.fasta"
-            )
             if TBL:
                 lib.log.info("Existing tbl found: {:}".format(TBL))
                 shutil.copyfile(TBL, annotTBL)
@@ -819,7 +810,7 @@ def main(args):
             else:
                 GFF = os.path.join(outputdir, "annotate_misc", "genome.gff3")
                 GeneCounts = lib.gb2parts(
-                    genbank, annotTBL, GFF, Proteins, Transcripts, CDS, Scaffolds
+                    genbank, annotTBL, GFF, Proteins, Transcripts, Scaffolds
                 )
 
     # double check that you have a TBL file, otherwise will have nothing to append to.
@@ -1326,7 +1317,7 @@ def main(args):
     )
     if args.signalp:
         shutil.copyfile(args.signalp, signalp_out)
-    if lib.which("signalp") or lib.which("signalp6") or lib.checkannotations(signalp_out):
+    if lib.which("signalp") or lib.checkannotations(signalp_out):
         if not lib.checkannotations(signalp_out):
             lib.log.info("Predicting secreted proteins with SignalP")
             if shutil.which("signalp6") is not None:
@@ -1521,20 +1512,20 @@ def main(args):
                 lib.log.error(
                     "Mitochondrial pass thru mocde {} is not an integer".format(mcode)
                 )
-        if isinstance(mcode, int):
-            # now we can safely add to genome.fsa
-            with open(tbl2genome, "a") as outfile:
-                with open(mitocontigs, "r") as infile:
-                    for rec in SeqIO.parse(infile, "fasta"):
-                        if "circular" in rec.description:
-                            topology = "[topology=circular] "
-                        else:
-                            topology = ""
-                        outfile.write(
-                            ">{} [mcode={}] {}[location=mitochondrion]\n{}\n".format(
-                                rec.id, mcode, topology, lib.softwrap(str(rec.seq))
-                            ))
-
+            if isinstance(mcode, int):
+                # now we can safely add to genome.fsa
+                with open(tbl2genome, "a") as outfile:
+                    with open(mitocontigs, "r") as infile:
+                        for rec in SeqIO.parse(infile, "fasta"):
+                            if "circular" in rec.description:
+                                topology = "[topology=circular] "
+                            else:
+                                topology = ""
+                            outfile.write(
+                                ">{} [mcode={}] {}[location=mitochondrion]\n{}\n".format(
+                                    rec.id, mcode, topology, lib.softwrap(str(rec.seq))
+                                )
+                            )
 
     # add annotation to tbl annotation file, generate dictionary of dictionaries with values as a list
     # need to keep multiple transcripts annotations separate, so this approach may have to modified
@@ -1720,10 +1711,75 @@ def main(args):
         lib.log.info(
             "ERROR: GBK file conversion failed, tbl2asn parallel script has died"
         )
-        sys.exit(1)
+        lib.log.info("Trying single threaded tbl2asn as backup")
+        meta = "[organism=" + args.species + "]"
+        if args.isolate:
+            isolate_meta = "[isolate=" + args.isolate + "]"
+            meta = meta + " " + isolate_meta
+        if args.strain:
+            strain_meta = "[strain=" + args.strain + "]"
+            meta = meta + " " + strain_meta
+        fun_version = lib.get_version()
+        gag3dir = os.path.join(args.out, "annotate_misc", "tbl2asn")
+##        cmd = [
+##            "tbl2asn",
+##            "-y",
+##            '"Annotated using ' + fun_version + '"',
+##            "-N",
+##            "1",
+##            "-t",
+##            SBT,
+##            "-M",
+##            "n",
+##            "-j",
+##            '"' + meta + '"',
+##            "-V",
+##            "b",
+##            "-c",
+##            "f",
+##            "-T",
+##            "-a",
+##            "r10u",
+##            "-p",
+##            gag3dir,
+##        ]
+        cmd = [
+            "linux64.table2asn",
+            "-y",
+            '"Annotated using ' + fun_version + '"',
+            "-t",
+            SBT,
+            "-M",
+            "n",
+            "-j",
+            '"' + meta + '"',
+            "-V",
+            "b",
+            "-c",
+            "f",
+            "-a",
+            "a",
+            "-indir",
+            gag3dir,
+            "-f", #new additions start here 
+            os.path.join(gag3dir, "genome.tbl"),
+            "-i",
+            os.path.join(gag3dir, "genome.fsa"),
+            "-Z",
+        ]
+        subprocess.call(cmd)
+        if not lib.checkannotations(os.path.join(gag3dir, "genome.gbf")):
+            lib.log.info("CMD: {}".format(" ".join(cmd)))
+            lib.log.info(
+                "ERROR: tbl2asn also failed in single threaded mode, check tbl2asn installation/compilation"
+            )
+            sys.exit(1)
+        else:
+            lib.log.debug("{}".format(" ".join(cmd)))
 
     # parse discrepancy report to see which names/product descriptions failed/passed
     # return dict containing tuples of (GeneName, GeneProduct, [reason])
+    discrep = os.path.join(outputdir, "annotate_misc", "tbl2asn", "genome.dr")
     BadProducts = []
     if os.path.isfile(discrep) and os.path.exists(discrep):
         BadProducts = lib.getFailedProductNames(discrep, Gene2ProdFinal)
